@@ -329,7 +329,7 @@ if [[ $latest != $current || $debug ]]; then
     mv "$scratch/$package" "$package"
 
     # Skips deploy
-    if [[ $skip_release ]]; then echo "Done."; exit 0; fi
+    # if [[ $skip_release ]]; then echo "Done."; exit 0; fi
 
     # Deploy to repository
     echo "Merging changes to Github..."
