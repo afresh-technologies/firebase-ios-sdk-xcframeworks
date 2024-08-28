@@ -53,8 +53,8 @@ The `Package.swift` and `Sources` files are automatically generated via a [scrip
 The script performs the following actions:
 - Downloads the latest release from https://github.com/firebase/firebase-ios-sdk
 - Parses the Firebase.zip to generate Package.swift and Sources/
-- Commits changes on a new branch and creates a PR
-- Creates a draft release, with a tag that mirrors the Firebase release. The draft release includes the assets needed for the swift package
+- Commits changes on a new branch, creates, and merges a PR
+- Publishes a release, with a tag that mirrors the Firebase release. The release includes the assets needed for the swift package
 
 ## Running the script locally
 - Install github cli: `$ brew install gh`

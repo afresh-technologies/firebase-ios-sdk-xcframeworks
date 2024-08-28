@@ -260,6 +260,14 @@ generate_swift_package () {
     template_replace $package "// GENERATE BINARIES" $binaries; rm -f $binaries
 }
 
+login_default() {
+    echo "$GITHUB_TOKEN" | gh auth login --with-token
+}
+
+login_reviewer() {
+    echo "$REVIEWER_TOKEN" | gh auth login --with-token
+}
+
 commit_changes() {
     branch=$1
     git checkout -b $branch
@@ -267,6 +275,10 @@ commit_changes() {
     git commit -m"Updated Package.swift and sources for latest firebase sdks"
     git push -u origin $branch
     gh pr create --fill
+    login_reviewer
+    gh pr review --approve
+    login_default
+    gh pr merge --squash
 }
 
 # Exit when any command fails
@@ -276,6 +288,8 @@ set -o pipefail
 # Repos
 firebase_repo="https://github.com/firebase/firebase-ios-sdk"
 xcframeworks_repo="https://github.com/afresh-technologies/firebase-ios-sdk-xcframeworks"
+
+login_default
 
 # Release versions
 latest=$(latest_release_number $firebase_repo)
@@ -329,13 +343,13 @@ if [[ $latest != $current || $debug ]]; then
     mv "$scratch/$package" "$package"
 
     # Skips deploy
-    # if [[ $skip_release ]]; then echo "Done."; exit 0; fi
+    if [[ $skip_release ]]; then echo "Done."; exit 0; fi
 
     # Deploy to repository
     echo "Merging changes to Github..."
     commit_changes "release/$latest"
     echo "Creating release draft"
-    echo "Release $latest" | gh release create --target "release/$latest" --draft $latest $scratch/dist/*.xcframework.zip
+    echo "Release $latest" | gh release create --title "$latest" --target "release/$latest" $latest $scratch/dist/*.xcframework.zip
 else
     echo "$current is up to date."
 fi
