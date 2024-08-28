@@ -261,7 +261,7 @@ generate_swift_package () {
 }
 
 login_default() {
-    echo "$GITHUB_TOKEN" | gh auth login --with-token
+    echo "$AUTHOR_TOKEN" | gh auth login --with-token
 }
 
 login_reviewer() {
