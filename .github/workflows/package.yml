@@ -15,5 +15,5 @@ jobs:
       - name: Release
         run: cd .scripts && sh ./package.sh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTHOR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEWER_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
