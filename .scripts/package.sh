@@ -9,6 +9,21 @@ latest_release_number () {
     head -1 || echo '0.0.0'
 }
 
+release_branch_exists () {
+    # Check if the branch exists on the remote
+    git ls-remote --heads origin "$1" | grep -q "refs/heads/$1"
+}
+
+pr_exists () {
+    # Check if the PR exists on the remote
+    gh pr view $1
+}
+
+is_pr_approved () {
+    # Check if the PR needs review
+    gh pr view $1 --json reviewDecision | jq '.reviewDecision' | grep "APPROVED"
+}
+
 xcframework_name () {
     # Filter out path and extension to get the framework name
     # Ex. xcframework_name "FirebaseFirestore/leveldb-library.xcframework" = "leveldb-library"
@@ -270,13 +285,40 @@ login_reviewer() {
 
 commit_changes() {
     branch=$1
-    git checkout -b $branch
+    branch_exists=$(release_branch_exists $branch)
+
+    if [[ $branch_exists ]]; then
+        echo "Branch $branch already exists."
+        git checkout $branch
+    else
+        echo "Creating branch $branch..."
+        git checkout -b $branch
+    fi
+
     git add .
     git commit -m"Updated Package.swift and sources for latest firebase sdks"
     git push -u origin $branch
-    gh pr create --fill
-    login_reviewer
-    gh pr review --approve
+
+    pr_exists=$(pr_exists $branch)
+
+    if [[ $pr_exists ]]; then
+        echo "Pull request $branch already exists."
+    else
+        echo "Creating pull request for $branch..."
+        gh pr create --fill
+    fi
+
+    is_pr_approved=$(is_pr_approved $branch)
+
+    if [[ $is_pr_approved ]]; then
+        echo "Pull request $branch is already approved."
+    else
+        echo "Approving pull request $branch..."
+        login_reviewer
+        gh pr review --approve
+    fi
+    
+    echo "Merging pull request $branch..."
     login_default
     gh pr merge --squash
 }
