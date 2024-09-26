@@ -31,9 +31,9 @@ jobs:
           cd .scripts
 
           if [ "${LOG_LEVEL}" == "debug" ]; then
-            sh -x ./package.sh force
+            sh -x ./package.sh
           else
-            sh ./package.sh force
+            sh ./package.sh
           fi
         env:
           AUTHOR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

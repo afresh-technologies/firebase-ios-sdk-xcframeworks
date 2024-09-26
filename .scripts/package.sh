@@ -1,13 +1,5 @@
 #!/bin/bash
 
-# Exit when any command fails
-set -e
-set -o pipefail
-
-# Repos
-firebase_repo="https://github.com/firebase/firebase-ios-sdk"
-xcframeworks_repo="https://github.com/afresh-technologies/firebase-ios-sdk-xcframeworks"
-
 latest_release_number () {
     # Github cli to get the latest release
     gh release list --repo $1 --limit 1 |
@@ -19,23 +11,17 @@ latest_release_number () {
 
 branch_exists () {
     # Check if the branch exists on the remote
-    local existed_in_remote=$(git ls-remote --heads origin "$1")
-
-    if [[ -z $existed_in_remote ]]; then
-        echo 0
-    else
-        echo 1
-    fi
+    git ls-remote --heads origin "$1" 2>/dev/null | grep -q "$1" || echo 0
 }
 
 pr_exists_and_open () {
     # Check if the PR exists and is open on the remote
-    gh pr view $1 --json state | jq '.state' | grep -q "OPEN" || true
+    gh pr view $1 --json state | jq '.state' | grep -q "OPEN" || echo 0
 }
 
 is_pr_approved () {
     # Check if the PR needs review
-    gh pr view $1 --json reviewDecision | jq '.reviewDecision' | grep -q "APPROVED" || true
+    gh pr view $1 --json reviewDecision | jq '.reviewDecision' | grep -q "APPROVED" || echo 0
 }
 
 xcframework_name () {
@@ -298,27 +284,28 @@ login_reviewer() {
 }
 
 commit_changes() {
-    latest=$1
-    branch=$2
-    scratch=$3
+    local latest=$1
+    local branch=$2
+    local scratch=$3
+    local repo=$4
 
     git add .
     git commit -m "Updated Package.swift and sources for latest firebase sdks"
     git push -u origin $branch
 
-    pr_exists_and_open=$(pr_exists_and_open $branch)
-    release_notes=$(gh release view --repo $repo --json body | jq '.body')
+    local pr_exists_and_open=$(pr_exists_and_open $branch)
+    local release_notes=$(gh release view --repo $repo --json body | jq '.body')
 
-    if [[ $pr_exists_and_open ]]; then
+    if [[ $pr_exists_and_open -eq 1 ]]; then
         echo "Pull request $branch already exists."
     else
         echo "Creating pull request for $branch..."
         gh pr create --title "Update to Firebase $latest" --body "$release_notes" --base main --head $branch
     fi
 
-    is_pr_approved=$(is_pr_approved $branch)
+    local is_pr_approved=$(is_pr_approved $branch)
 
-    if [[ $is_pr_approved ]]; then
+    if [[ $is_pr_approved -eq 1 ]]; then
         echo "Pull request $branch is already approved."
     else
         echo "Approving pull request $branch..."
@@ -334,6 +321,14 @@ commit_changes() {
     gh release create --title "$latest" --notes "$release_notes" --target "$branch" $latest $scratch/dist/*.xcframework.zip
 }
 
+# Exit when any command fails
+set -e
+set -o pipefail
+
+# Repos
+firebase_repo="https://github.com/firebase/firebase-ios-sdk"
+xcframeworks_repo="https://github.com/afresh-technologies/firebase-ios-sdk-xcframeworks"
+
 login_default
 
 # Release versions
@@ -343,7 +338,6 @@ current=$(latest_release_number $xcframeworks_repo)
 # Args
 debug=$(echo $@ || "" | grep debug)
 skip_release=$(echo $@ || "" | grep skip-release)
-force=$(echo $@ || "" | grep force)
 
 if [[ $latest != $current || $debug ]]; then
     echo "$current is out of date. Updating to $latest..."
@@ -357,7 +351,7 @@ if [[ $latest != $current || $debug ]]; then
     release_branch_exists=$(branch_exists $branch)
     pr_exists_and_open=$(pr_exists_and_open $branch)
 
-    if [[ $release_branch_exists ]]; then
+    if [[ $release_branch_exists -eq 1 ]]; then
         echo "Branch $branch already exists."
         git checkout $branch
     else
@@ -365,7 +359,7 @@ if [[ $latest != $current || $debug ]]; then
         git checkout -b $branch
     fi
 
-    if [[ ! $pr_exists_and_open || $force ]]; then
+    if [[ $pr_exists_and_open -eq 0 || $FORCE ]]; then
         # Generate files in a temporary directory
         # Use subshell to return to original directory when finished with scratchwork
         create_scratch
@@ -411,7 +405,7 @@ if [[ $latest != $current || $debug ]]; then
 
     # Deploy to repository
     echo "Merging changes to Github..."
-    commit_changes "$latest" "$branch" "$scratch"
+    commit_changes "$latest" "$branch" "$scratch" "$firebase_repo"
 else
     echo "$current is up to date."
 fi
