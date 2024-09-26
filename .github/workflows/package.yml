@@ -11,6 +11,10 @@ on:
         options:
           - info
           - debug
+      force:
+        description: 'Force re-creating the package if a release already exists'
+        required: false
+        type: boolean
   schedule:
     # Every day at 05:00 EST (10:00 UTC)
     - cron: '0 10 * * *'
@@ -27,11 +31,12 @@ jobs:
           cd .scripts
 
           if [ "${LOG_LEVEL}" == "debug" ]; then
-            sh -x ./package.sh
+            sh -x ./package.sh force
           else
-            sh ./package.sh
+            sh ./package.sh force
           fi
         env:
           AUTHOR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEWER_TOKEN: ${{ secrets.AFRESHY_PAT }}
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
+          FORCE: ${{ inputs.force || false }}

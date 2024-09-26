@@ -337,6 +337,7 @@ current=$(latest_release_number $xcframeworks_repo)
 # Args
 debug=$(echo $@ || "" | grep debug)
 skip_release=$(echo $@ || "" | grep skip-release)
+force=$(echo $@ || "" | grep force)
 
 if [[ $latest != $current || $debug ]]; then
     echo "$current is out of date. Updating to $latest..."
@@ -345,9 +346,10 @@ if [[ $latest != $current || $debug ]]; then
     package="Package.swift"
     branch="release/$latest"
 
-    release_branch_exists=$(branch_exists $branch)
-
     git fetch origin
+
+    release_branch_exists=$(branch_exists $branch)
+    pr_exists_and_open=$(pr_exists_and_open $branch)
 
     if [[ $release_branch_exists ]]; then
         echo "Branch $branch already exists."
@@ -357,42 +359,46 @@ if [[ $latest != $current || $debug ]]; then
         git checkout -b $branch
     fi
 
-    # Generate files in a temporary directory
-    # Use subshell to return to original directory when finished with scratchwork
-    create_scratch
-    (
-        cd $scratch
-        home=$OLDPWD
-        echo "Downloading latest release..."
-        gh release download --pattern 'Firebase.zip' --repo $firebase_repo
-        echo "Unzipping.."
-        unzip -q Firebase.zip
-        echo "Preparing xcframeworks for distribution..."
-        cd Firebase
-        rename_frameworks "_"
-        zip_frameworks
-        echo "Creating distribution files..."
-        prepare_files_for_distribution "../$distribution"
-        echo "Creating source files..."
-        generate_sources "../$sources"
-        # Create test package using local binaries and make sure it builds
-        generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo $distribution
-        echo "Validating..."
-        (cd ..; swift package dump-package | read pac)
-        (cd ..; swift build) # TODO: create tests and replace this line with `(cd ..; swift test)`
-        # Create release package using remote binaries and make sure the Package.swift file is parseable
-        generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo ''
-        echo "Validating..."
-        (cd ..; swift package dump-package | read pac)
-    )
+    if [[ ! $pr_exists_and_open || $force ]]; then
+        # Generate files in a temporary directory
+        # Use subshell to return to original directory when finished with scratchwork
+        create_scratch
+        (
+            cd $scratch
+            home=$OLDPWD
+            echo "Downloading latest release..."
+            gh release download --pattern 'Firebase.zip' --repo $firebase_repo
+            echo "Unzipping.."
+            unzip -q Firebase.zip
+            echo "Preparing xcframeworks for distribution..."
+            cd Firebase
+            rename_frameworks "_"
+            zip_frameworks
+            echo "Creating distribution files..."
+            prepare_files_for_distribution "../$distribution"
+            echo "Creating source files..."
+            generate_sources "../$sources"
+            # Create test package using local binaries and make sure it builds
+            generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo $distribution
+            echo "Validating..."
+            (cd ..; swift package dump-package | read pac)
+            (cd ..; swift build) # TODO: create tests and replace this line with `(cd ..; swift test)`
+            # Create release package using remote binaries and make sure the Package.swift file is parseable
+            generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo ''
+            echo "Validating..."
+            (cd ..; swift package dump-package | read pac)
+        )
 
-    echo "Moving files to repo..."; cd ..
-    # Remove any existing files
-    if [ -d $sources ]; then rm -rf "$sources"; fi
-    if [ -f $package ]; then rm -f "$package"; fi
-    # Move generated files into the repo directory
-    mv "$scratch/$sources" "$sources"
-    mv "$scratch/$package" "$package"
+        echo "Moving files to repo..."; cd ..
+        # Remove any existing files
+        if [ -d $sources ]; then rm -rf "$sources"; fi
+        if [ -f $package ]; then rm -f "$package"; fi
+        # Move generated files into the repo directory
+        mv "$scratch/$sources" "$sources"
+        mv "$scratch/$package" "$package"
+    else
+        echo "Pull request $branch already exists and is open."
+    fi
 
     # Skips deploy
     if [[ $skip_release ]]; then echo "Done."; exit 0; fi
