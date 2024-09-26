@@ -11,7 +11,7 @@ latest_release_number () {
 
 release_branch_exists () {
     # Check if the branch exists on the remote
-    git ls-remote --heads origin "$1" | grep -q "refs/heads/$1"
+    git ls-remote --heads origin "$1" | grep -q "refs/heads/$1" || true
 }
 
 pr_exists () {
