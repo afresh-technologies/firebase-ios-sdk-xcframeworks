@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Exit when any command fails
+set -e
+set -o pipefail
+
+# Repos
+firebase_repo="https://github.com/firebase/firebase-ios-sdk"
+xcframeworks_repo="https://github.com/afresh-technologies/firebase-ios-sdk-xcframeworks"
+
 latest_release_number () {
     # Github cli to get the latest release
     gh release list --repo $1 --limit 1 |
@@ -290,19 +298,22 @@ login_reviewer() {
 }
 
 commit_changes() {
-    branch=$1
+    latest=$1
+    branch=$2
+    scratch=$3
 
     git add .
     git commit -m "Updated Package.swift and sources for latest firebase sdks"
     git push -u origin $branch
 
     pr_exists_and_open=$(pr_exists_and_open $branch)
+    release_notes=$(gh release view --repo $repo --json body | jq '.body')
 
     if [[ $pr_exists_and_open ]]; then
         echo "Pull request $branch already exists."
     else
         echo "Creating pull request for $branch..."
-        gh pr create --fill
+        gh pr create --title "Update to Firebase $latest" --body "$release_notes" --base main --head $branch
     fi
 
     is_pr_approved=$(is_pr_approved $branch)
@@ -318,15 +329,10 @@ commit_changes() {
     echo "Merging pull request $branch..."
     login_default
     gh pr merge --squash
+
+    echo "Creating release..."
+    gh release create --title "$latest" --notes "$release_notes" --target "$branch" $latest $scratch/dist/*.xcframework.zip
 }
-
-# Exit when any command fails
-set -e
-set -o pipefail
-
-# Repos
-firebase_repo="https://github.com/firebase/firebase-ios-sdk"
-xcframeworks_repo="https://github.com/afresh-technologies/firebase-ios-sdk-xcframeworks"
 
 login_default
 
@@ -405,9 +411,7 @@ if [[ $latest != $current || $debug ]]; then
 
     # Deploy to repository
     echo "Merging changes to Github..."
-    commit_changes "$branch"
-    echo "Creating release draft"
-    echo "Release $latest" | gh release create --title "$latest" --target "$branch" $latest $scratch/dist/*.xcframework.zip
+    commit_changes "$latest" "$branch" "$scratch"
 else
     echo "$current is up to date."
 fi

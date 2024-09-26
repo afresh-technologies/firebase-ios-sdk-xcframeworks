@@ -12,7 +12,7 @@ on:
           - info
           - debug
       force:
-        description: 'Force re-creating the package if a release already exists'
+        description: 'Force re-creating the package if a pull request is already open'
         required: false
         type: boolean
   schedule:
