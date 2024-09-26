@@ -9,19 +9,25 @@ latest_release_number () {
     head -1 || echo '0.0.0'
 }
 
-release_branch_exists () {
+branch_exists () {
     # Check if the branch exists on the remote
-    git ls-remote --heads origin "$1" | grep -q "refs/heads/$1"
+    local existed_in_remote=$(git ls-remote --heads origin "$1")
+
+    if [[ -z $existed_in_remote ]]; then
+        echo 0
+    else
+        echo 1
+    fi
 }
 
-pr_exists () {
-    # Check if the PR exists on the remote
-    gh pr view $1
+pr_exists_and_open () {
+    # Check if the PR exists and is open on the remote
+    gh pr view $1 --json state | jq '.state' | grep -q "OPEN" || true
 }
 
 is_pr_approved () {
     # Check if the PR needs review
-    gh pr view $1 --json reviewDecision | jq '.reviewDecision' | grep "APPROVED"
+    gh pr view $1 --json reviewDecision | jq '.reviewDecision' | grep -q "APPROVED" || true
 }
 
 xcframework_name () {
@@ -285,23 +291,14 @@ login_reviewer() {
 
 commit_changes() {
     branch=$1
-    branch_exists=$(release_branch_exists $branch)
-
-    if [[ $branch_exists ]]; then
-        echo "Branch $branch already exists."
-        git checkout $branch
-    else
-        echo "Creating branch $branch..."
-        git checkout -b $branch
-    fi
 
     git add .
-    git commit -m"Updated Package.swift and sources for latest firebase sdks"
+    git commit -m "Updated Package.swift and sources for latest firebase sdks"
     git push -u origin $branch
 
-    pr_exists=$(pr_exists $branch)
+    pr_exists_and_open=$(pr_exists_and_open $branch)
 
-    if [[ $pr_exists ]]; then
+    if [[ $pr_exists_and_open ]]; then
         echo "Pull request $branch already exists."
     else
         echo "Creating pull request for $branch..."
@@ -346,6 +343,19 @@ if [[ $latest != $current || $debug ]]; then
     distribution="dist"
     sources="Sources"
     package="Package.swift"
+    branch="release/$latest"
+
+    release_branch_exists=$(branch_exists $branch)
+
+    git fetch origin
+
+    if [[ $release_branch_exists ]]; then
+        echo "Branch $branch already exists."
+        git checkout $branch
+    else
+        echo "Creating branch $branch..."
+        git checkout -b $branch
+    fi
 
     # Generate files in a temporary directory
     # Use subshell to return to original directory when finished with scratchwork
@@ -389,9 +399,9 @@ if [[ $latest != $current || $debug ]]; then
 
     # Deploy to repository
     echo "Merging changes to Github..."
-    commit_changes "release/$latest"
+    commit_changes "$branch"
     echo "Creating release draft"
-    echo "Release $latest" | gh release create --title "$latest" --target "release/$latest" $latest $scratch/dist/*.xcframework.zip
+    echo "Release $latest" | gh release create --title "$latest" --target "$branch" $latest $scratch/dist/*.xcframework.zip
 else
     echo "$current is up to date."
 fi
