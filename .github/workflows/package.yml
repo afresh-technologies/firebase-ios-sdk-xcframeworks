@@ -16,4 +16,4 @@ jobs:
         run: cd .scripts && sh ./package.sh
         env:
           AUTHOR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REVIEWER_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
+          REVIEWER_TOKEN: ${{ secrets.AFRESHY_PAT }}
