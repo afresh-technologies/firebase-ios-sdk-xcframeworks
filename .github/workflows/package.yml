@@ -2,8 +2,18 @@ name: Publish Release
 
 on:
   workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'info'
+        type: choice
+        options:
+          - info
+          - debug
   schedule:
-    - cron: '*/60 */2 * * *' # Every 2 hours
+    # Every day at 05:00 EST (10:00 UTC)
+    - cron: '0 10 * * *'
 
 jobs:
   build:
@@ -13,7 +23,15 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Release
-        run: cd .scripts && sh ./package.sh
+        run: |
+          cd .scripts
+
+          if [ "${LOG_LEVEL}" == "debug" ]; then
+            sh -x ./package.sh
+          else
+            sh ./package.sh
+          fi
         env:
           AUTHOR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVIEWER_TOKEN: ${{ secrets.AFRESHY_PAT }}
+          LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
