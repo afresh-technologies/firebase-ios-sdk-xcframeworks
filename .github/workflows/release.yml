@@ -1,0 +1,85 @@
+name: Release Version
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest Firebase release
+        id: latest_firebase_release
+        run: |
+          version=$(gh release view --repo $REPO --json tagName --jq '.tagName')
+          echo "::set-output name=version::${version}"
+        env:
+          REPO: firebase/firebase-ios-sdk
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if release exists
+        id: check_release
+        run: |
+          echo "Checking if release $version exists..."
+      
+          # Check if the release exists by querying the GitHub API
+          if gh api repos/${{ github.repository }}/releases/tags/$VERSION --silent; then
+            echo "Release $VERSION exists."
+            echo "::set-output name=exists::true"
+          else
+            echo "Release $VERSION does not exist."
+            echo "::set-output name=exists::false"
+          fi
+        env:
+          VERSION: ${{ steps.latest_firebase_release.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+
+      - name: Download artifacts from latest build run
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          branch_name=release/$VERSION
+          workflow_name="Build Release"
+          
+          echo "Getting build workflow run for branch: $branch_name"
+          
+          # Get the latest workflow run ID for the branch
+          run_id=$(gh api repos/${{ github.repository }}/actions/runs \
+            --paginate \
+            --jq ".workflow_runs[] | select(.head_branch == \"$branch_name\" and .name == \"$workflow_name\") | .id" | head -n 1)
+
+      
+          if [ -z "$run_id" ]; then
+            echo "No build workflow run found for branch $branch_name"
+            exit 1
+          else
+            echo "Found build workflow run ID: $run_id"
+          fi
+          
+          # Download all artifacts from the workflow run
+          gh run download $run_id --repo ${{ github.repository }} --dir ./artifacts/
+        env:
+          VERSION: ${{ steps.latest_firebase_release.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release and upload artifacts
+        run: |
+          echo "Creating a release for version $version"
+
+          firebase_release_id=$(gh api repos/$FIREBASE_REPO/releases/tags/$VERSION --jq '.id')
+          release_notes=$(gh release view $release_id --repo $FIREBASE_REPO --json body | jq -r '.body')
+      
+          # Create a new release
+          gh release create $version ./artifacts/* \
+            --title "$version" \
+            --notes "$release_notes"
+        env:
+          FIREBASE_REPO: firebase/firebase-ios-sdk
+          VERSION: ${{ steps.latest_firebase_release.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+        

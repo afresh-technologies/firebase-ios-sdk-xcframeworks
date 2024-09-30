@@ -1,0 +1,43 @@
+name: Create Release Branch
+
+on:
+  schedule:
+    # Every day at 05:00 EST (10:00 UTC)
+    - cron: '0 10 * * *'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get latest Firebase release
+        id: latest_firebase_release
+        run: |
+          latest_firebase_release=$(gh release view --repo $REPO --json tagName --jq '.tagName')
+          echo "::set-output name=latest_firebase_release::${latest_firebase_release}"
+        env:
+          REPO: firebase/firebase-ios-sdk
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if branch exists
+        id: check_branch
+        run: |
+          git fetch origin
+
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "::set-output name=branch_exists::true"
+          else
+            echo "::set-output name=branch_exists::false"
+          fi
+        env:
+          BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}
+
+      - name: Create release branch
+        if: steps.check_branch.outputs.branch_exists == 'false'
+        run: |
+          git checkout -b $BRANCH
+          git push origin $BRANCH
+        env:
+          BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}
