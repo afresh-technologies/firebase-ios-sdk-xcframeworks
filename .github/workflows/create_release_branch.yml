@@ -35,6 +35,12 @@ jobs:
         env:
           BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}
 
+      - name: Set git credentials
+        run: |
+          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf ssh://git@github
+          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf https://github
+          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf git@github
+
       - name: Create release branch
         if: steps.check_branch.outputs.branch_exists == 'false'
         run: |
@@ -42,4 +48,3 @@ jobs:
           git push origin $BRANCH
         env:
           BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}
-          GITHUB_TOKEN: ${{ secrets.AFRESHY_PAT }}
