@@ -370,8 +370,26 @@ if [[ $latest != $current || $debug ]]; then
             gh release download --pattern 'Firebase.zip' --repo $firebase_repo
             echo "Unzipping.."
             unzip -q Firebase.zip
-            echo "Preparing xcframeworks for distribution..."
+            # Sometimes Firebase packages frameworks in a folder named for the version
+            if [ ! -d "Firebase" ]; then
+                # Get version number with _ instead of .
+                fixed_version=$(echo $latest | sed 's/\./_/g')
+
+                if [ -d "$fixed_version" ]; then
+                    cd $fixed_version
+                    # Find the first zip file in the current directory
+                    zip_file=$(ls -1 | grep .zip | head -1)
+                    echo "Unzipping $zip_file..."
+                    unzip -q $zip_file
+                    mv Firebase ../Firebase
+                    cd ..
+                else
+                    echo "Could not find Firebase folder."
+                    exit 1
+                fi
+            fi
             cd Firebase
+            echo "Preparing xcframeworks for distribution..."
             rename_frameworks "_"
             zip_frameworks
             echo "Creating distribution files..."
