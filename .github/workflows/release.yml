@@ -39,7 +39,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
 
-      - name: Download artifacts from latest build run
+      - name: Create release
         if: steps.check_release.outputs.exists == 'false'
         run: |
           branch_name=release/$VERSION
@@ -57,27 +57,21 @@ jobs:
 
             # Download all artifacts from the workflow run
             gh run download $run_id --repo ${{ github.repository }} --dir ./artifacts/
+
+            echo "Creating a release for version $version"
+
+            firebase_release_id=$(gh api repos/$FIREBASE_REPO/releases/tags/$VERSION --jq '.id')
+            release_notes=$(gh release view $release_id --repo $FIREBASE_REPO --json body | jq -r '.body')
+        
+            # Create a new release
+            gh release create $version ./artifacts/* \
+              --title "$version" \
+              --notes "$release_notes"
           fi
           
         env:
           VERSION: ${{ steps.latest_firebase_release.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create release and upload artifacts
-        if: steps.check_release.outputs.exists == 'false'
-        run: |
-          echo "Creating a release for version $version"
-
-          firebase_release_id=$(gh api repos/$FIREBASE_REPO/releases/tags/$VERSION --jq '.id')
-          release_notes=$(gh release view $release_id --repo $FIREBASE_REPO --json body | jq -r '.body')
-      
-          # Create a new release
-          gh release create $version ./artifacts/* \
-            --title "$version" \
-            --notes "$release_notes"
-        env:
           FIREBASE_REPO: firebase/firebase-ios-sdk
-          VERSION: ${{ steps.latest_firebase_release.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
         
