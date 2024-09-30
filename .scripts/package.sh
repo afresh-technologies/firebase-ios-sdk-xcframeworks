@@ -11,17 +11,20 @@ latest_release_number () {
 
 branch_exists () {
     # Check if the branch exists on the remote
-    git ls-remote --heads origin "$1" 2>/dev/null | grep -q "$1" || echo 0
+    ret=$(git ls-remote --heads origin "$1" 2>/dev/null | grep -q "$1"; echo $?)
+    if [ $ret -eq 0 ]; then echo 1; else echo 0; fi
 }
 
 pr_exists_and_open () {
     # Check if the PR exists and is open on the remote
-    gh pr view $1 --json state | jq -r '.state' | grep -q "OPEN" || echo 0
+    ret=$(gh pr view $1 --json state | jq -r '.state' | grep -q "OPEN"; echo $?)
+    if [ $ret -eq 0 ]; then echo 1; else echo 0; fi
 }
 
 is_pr_approved () {
     # Check if the PR needs review
-    gh pr view $1 --json reviewDecision | jq -r '.reviewDecision' | grep -q "APPROVED" || echo 0
+    ret=$(gh pr view $1 --json reviewDecision | jq -r '.reviewDecision' | grep -q "APPROVED"; echo $?)
+    if [ $ret -eq 0 ]; then echo 1; else echo 0; fi
 }
 
 xcframework_name () {
