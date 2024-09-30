@@ -52,7 +52,7 @@ jobs:
         run: |
           cd .scripts
           sh ./package.sh
-
+          cd ..
           git add .
           git commit -m "Updated Package.swift and sources for latest firebase sdks"
           git push -u origin release/$VERSION
