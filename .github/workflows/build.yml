@@ -1,0 +1,78 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'releases/**'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from branch name
+        id: extract_version
+        run: |
+          branch_name=${{ github.ref_name }}
+          if [[ "$branch_name" == release/* ]]; then
+            version=${branch_name#release/}
+            echo "Version: $version"
+            echo "::set-output name=version::${version}"
+          else
+            echo "Not a release branch."
+            exit 1
+          fi
+
+      - name: Download release artifact
+        id: download_artifact
+        run: |
+          artifact_name="Firebase.zip"
+          
+          echo "Downloading artifact from $REPO version $VERSION"
+          
+          # Get the release ID for the specific version
+          release_id=$(gh api repos/$REPO/releases/tags/$VERSION --jq '.id')
+
+          # Get release notes
+          release_notes=$(gh release view $release_id --repo $REPO --json body | jq -r '.body')
+          echo "::set-output name=release_notes::${release_notes}"
+          
+          # Download the release artifact for that release ID
+          gh release download $release_id --repo $REPO --pattern $artifact_name --dir ./
+        env:
+          REPO: firebase/firebase-ios-sdk
+          VERSION: ${{ steps.extract_version.outputs.version }}
+
+      - name: Package release
+        run: |
+          cd .scripts
+          sh ./package.sh
+
+          git add .
+          git commit -m "Updated Package.swift and sources for latest firebase sdks"
+          git push -u origin release/$VERSION
+        env:
+          VERSION: ${{ steps.extract_version.outputs.version }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Firebase
+          path: artifacts/*
+
+      - name: Open pull request
+        run: |
+          gh pr create --title "Update to Firebase $VERSION" --body "$RELEASE_NOTES" --base main --head release/$VERSION
+          echo "::set-output name=number::${number}"
+        env:
+          VERSION: ${{ steps.extract_version.outputs.version }}
+          RELEASE_NOTES: ${{ steps.download_artifact.outputs.release_notes }}
+
+      - name: Approve pull request
+        run: |
+          gh pr review --approve
+        env:
+          GITHUB_TOKEN: ${{ secrets.AFRESHY_PAT }}
