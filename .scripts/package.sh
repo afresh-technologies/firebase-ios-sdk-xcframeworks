@@ -311,7 +311,6 @@ if [ -f $package ]; then rm -f "$package"; fi
 # Move generated files into the repo directory
 mv "$scratch/$sources" "$sources"
 mv "$scratch/$package" "$package"
-mkdir ../artifacts
-cp -r "$scratch/$distribution/*" ../artifacts/
+mv "$scratch/$distribution" ../artifacts
 
 echo "Done."
