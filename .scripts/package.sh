@@ -9,6 +9,21 @@ latest_release_number () {
     head -1 || echo '0.0.0'
 }
 
+branch_exists () {
+    # Check if the branch exists on the remote
+    git ls-remote --heads origin "$1" 2>/dev/null | grep -q "$1" || echo 0
+}
+
+pr_exists_and_open () {
+    # Check if the PR exists and is open on the remote
+    gh pr view $1 --json state | jq -r '.state' | grep -q "OPEN" || echo 0
+}
+
+is_pr_approved () {
+    # Check if the PR needs review
+    gh pr view $1 --json reviewDecision | jq -r '.reviewDecision' | grep -q "APPROVED" || echo 0
+}
+
 xcframework_name () {
     # Filter out path and extension to get the framework name
     # Ex. xcframework_name "FirebaseFirestore/leveldb-library.xcframework" = "leveldb-library"
@@ -269,16 +284,41 @@ login_reviewer() {
 }
 
 commit_changes() {
-    branch=$1
-    git checkout -b $branch
+    local latest=$1
+    local branch=$2
+    local scratch=$3
+    local repo=$4
+
     git add .
-    git commit -m"Updated Package.swift and sources for latest firebase sdks"
+    git commit -m "Updated Package.swift and sources for latest firebase sdks"
     git push -u origin $branch
-    gh pr create --fill
-    login_reviewer
-    gh pr review --approve
+
+    local pr_exists_and_open=$(pr_exists_and_open $branch)
+    local release_notes=$(gh release view --repo $repo --json body | jq -r '.body')
+
+    if [[ $pr_exists_and_open -eq 1 ]]; then
+        echo "Pull request $branch already exists."
+    else
+        echo "Creating pull request for $branch..."
+        gh pr create --title "Update to Firebase $latest" --body "$release_notes" --base main --head $branch
+    fi
+
+    local is_pr_approved=$(is_pr_approved $branch)
+
+    if [[ $is_pr_approved -eq 1 ]]; then
+        echo "Pull request $branch is already approved."
+    else
+        echo "Approving pull request $branch..."
+        login_reviewer
+        gh pr review --approve
+    fi
+    
+    echo "Merging pull request $branch..."
     login_default
     gh pr merge --squash
+
+    echo "Creating release..."
+    gh release create --title "$latest" --notes "$release_notes" --target "$branch" $latest $scratch/dist/*.xcframework.zip
 }
 
 # Exit when any command fails
@@ -304,52 +344,68 @@ if [[ $latest != $current || $debug ]]; then
     distribution="dist"
     sources="Sources"
     package="Package.swift"
+    branch="release/$latest"
 
-    # Generate files in a temporary directory
-    # Use subshell to return to original directory when finished with scratchwork
-    create_scratch
-    (
-        cd $scratch
-        home=$OLDPWD
-        echo "Downloading latest release..."
-        gh release download --pattern 'Firebase.zip' --repo $firebase_repo
-        echo "Unzipping.."
-        unzip -q Firebase.zip
-        echo "Preparing xcframeworks for distribution..."
-        cd Firebase
-        rename_frameworks "_"
-        zip_frameworks
-        echo "Creating distribution files..."
-        prepare_files_for_distribution "../$distribution"
-        echo "Creating source files..."
-        generate_sources "../$sources"
-        # Create test package using local binaries and make sure it builds
-        generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo $distribution
-        echo "Validating..."
-        (cd ..; swift package dump-package | read pac)
-        (cd ..; swift build) # TODO: create tests and replace this line with `(cd ..; swift test)`
-        # Create release package using remote binaries and make sure the Package.swift file is parseable
-        generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo ''
-        echo "Validating..."
-        (cd ..; swift package dump-package | read pac)
-    )
+    git fetch origin
 
-    echo "Moving files to repo..."; cd ..
-    # Remove any existing files
-    if [ -d $sources ]; then rm -rf "$sources"; fi
-    if [ -f $package ]; then rm -f "$package"; fi
-    # Move generated files into the repo directory
-    mv "$scratch/$sources" "$sources"
-    mv "$scratch/$package" "$package"
+    release_branch_exists=$(branch_exists $branch)
+    pr_exists_and_open=$(pr_exists_and_open $branch)
+
+    if [[ $release_branch_exists -eq 1 ]]; then
+        echo "Branch $branch already exists."
+        git checkout $branch
+    else
+        echo "Creating branch $branch..."
+        git checkout -b $branch
+    fi
+
+    if [[ $pr_exists_and_open -eq 0 || $FORCE ]]; then
+        # Generate files in a temporary directory
+        # Use subshell to return to original directory when finished with scratchwork
+        create_scratch
+        (
+            cd $scratch
+            home=$OLDPWD
+            echo "Downloading latest release..."
+            gh release download --pattern 'Firebase.zip' --repo $firebase_repo
+            echo "Unzipping.."
+            unzip -q Firebase.zip
+            echo "Preparing xcframeworks for distribution..."
+            cd Firebase
+            rename_frameworks "_"
+            zip_frameworks
+            echo "Creating distribution files..."
+            prepare_files_for_distribution "../$distribution"
+            echo "Creating source files..."
+            generate_sources "../$sources"
+            # Create test package using local binaries and make sure it builds
+            generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo $distribution
+            echo "Validating..."
+            (cd ..; swift package dump-package | read pac)
+            (cd ..; swift build) # TODO: create tests and replace this line with `(cd ..; swift test)`
+            # Create release package using remote binaries and make sure the Package.swift file is parseable
+            generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo ''
+            echo "Validating..."
+            (cd ..; swift package dump-package | read pac)
+        )
+
+        echo "Moving files to repo..."; cd ..
+        # Remove any existing files
+        if [ -d $sources ]; then rm -rf "$sources"; fi
+        if [ -f $package ]; then rm -f "$package"; fi
+        # Move generated files into the repo directory
+        mv "$scratch/$sources" "$sources"
+        mv "$scratch/$package" "$package"
+    else
+        echo "Pull request $branch already exists and is open."
+    fi
 
     # Skips deploy
     if [[ $skip_release ]]; then echo "Done."; exit 0; fi
 
     # Deploy to repository
     echo "Merging changes to Github..."
-    commit_changes "release/$latest"
-    echo "Creating release draft"
-    echo "Release $latest" | gh release create --title "$latest" --target "release/$latest" $latest $scratch/dist/*.xcframework.zip
+    commit_changes "$latest" "$branch" "$scratch" "$firebase_repo"
 else
     echo "$current is up to date."
 fi
