@@ -44,6 +44,7 @@ jobs:
         env:
           REPO: firebase/firebase-ios-sdk
           VERSION: ${{ steps.extract_version.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package release
         run: |
@@ -69,6 +70,7 @@ jobs:
         env:
           VERSION: ${{ steps.extract_version.outputs.version }}
           RELEASE_NOTES: ${{ steps.download_artifact.outputs.release_notes }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Approve pull request
         run: |
