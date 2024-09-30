@@ -10,8 +10,16 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
+      - name: Set git credentials
+        run: |
+          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf ssh://git@github
+          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf https://github
+          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf git@github
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AFRESHY_PAT }}
 
       - name: Get latest Firebase release
         id: latest_firebase_release
@@ -33,13 +41,7 @@ jobs:
             echo "::set-output name=branch_exists::false"
           fi
         env:
-          BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}
-
-      - name: Set git credentials
-        run: |
-          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf ssh://git@github
-          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf https://github
-          /usr/bin/git config --global --add url."https://${{ secrets.AFRESHY_PAT }}:x-oauth-basic@github".insteadOf git@github
+          BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}      
 
       - name: Create release branch
         if: steps.check_branch.outputs.branch_exists == 'false'
