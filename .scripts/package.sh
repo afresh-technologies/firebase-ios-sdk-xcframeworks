@@ -312,6 +312,6 @@ if [ -f $package ]; then rm -f "$package"; fi
 mv "$scratch/$sources" "$sources"
 mv "$scratch/$package" "$package"
 mkdir ../artifacts
-cp -r "$scratch/$distribution/*.xcframework.zip" ../artifacts/
+cp -r "$scratch/$distribution/*" ../artifacts/
 
 echo "Done."
