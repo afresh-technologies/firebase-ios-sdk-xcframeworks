@@ -1,6 +1,7 @@
 name: Create Release Branch
 
 on:
+  workflow_dispatch:
   schedule:
     # Every day at 05:00 EST (10:00 UTC)
     - cron: '0 10 * * *'
