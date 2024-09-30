@@ -61,8 +61,7 @@ jobs:
 
             echo "Creating a release for version $version"
 
-            firebase_release_id=$(gh api repos/$FIREBASE_REPO/releases/tags/$VERSION --jq '.id')
-            release_notes=$(gh release view $release_id --repo $FIREBASE_REPO --json body | jq -r '.body')
+            release_notes=$(gh release view $VERSION --repo $FIREBASE_REPO --json body | jq -r '.body')
         
             # Create a new release
             gh release create $version ./artifacts/* \
