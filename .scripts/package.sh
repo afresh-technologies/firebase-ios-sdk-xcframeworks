@@ -2,6 +2,15 @@
 
 latest_release_number () {
     # Github cli to get the latest release
+    gh release list --repo $1 --limit 1 --exclude-drafts |
+    # Regex to find the version number, assumes semantic versioning
+    grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' |
+    # Take the first match in the regex
+    head -1 || echo '0.0.0'
+}
+
+latest_draft_release_number () {
+    # Github cli to get the latest release
     gh release list --repo $1 --limit 1 |
     # Regex to find the version number, assumes semantic versioning
     grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' |
@@ -286,6 +295,26 @@ login_reviewer() {
     echo "$REVIEWER_TOKEN" | gh auth login --with-token
 }
 
+approve_and_merge_pr() {
+    local is_pr_approved=$(is_pr_approved $1)
+
+    if [[ $is_pr_approved -eq 1 ]]; then
+        echo "Pull request $1 is already approved."
+    else
+        echo "Approving pull request $1..."
+        login_reviewer
+        gh pr review --approve
+    fi
+
+    echo "Merging pull request $1..."
+    login_default
+    gh pr merge --squash
+}
+
+release_release() {
+    gh release edit "$1" --draft=false
+}
+
 commit_changes() {
     local latest=$1
     local branch=$2
@@ -306,22 +335,11 @@ commit_changes() {
         gh pr create --title "Update to Firebase $latest" --body "$release_notes" --base main --head $branch
     fi
 
-    local is_pr_approved=$(is_pr_approved $branch)
+    echo "Creating draft release..."
+    gh release create --draft --title "$latest" --notes "$release_notes" --target "$branch" $latest $scratch/dist/*.xcframework.zip
 
-    if [[ $is_pr_approved -eq 1 ]]; then
-        echo "Pull request $branch is already approved."
-    else
-        echo "Approving pull request $branch..."
-        login_reviewer
-        gh pr review --approve
-    fi
-    
-    echo "Merging pull request $branch..."
-    login_default
-    gh pr merge --squash
-
-    echo "Creating release..."
-    gh release create --title "$latest" --notes "$release_notes" --target "$branch" $latest $scratch/dist/*.xcframework.zip
+    approve_and_merge_pr $branch
+    release_release $latest
 }
 
 # Exit when any command fails
@@ -337,6 +355,8 @@ login_default
 # Release versions
 latest=$(latest_release_number $firebase_repo)
 current=$(latest_release_number $xcframeworks_repo)
+latest_draft=$(latest_draft_release_number $xcframeworks_repo)
+has_pending_draft=$([[ $latest_draft == $latest ]] && echo 1 || echo 0)
 
 # Args
 debug=$(echo $@ || "" | grep debug)
@@ -362,60 +382,70 @@ if [[ $latest != $current || $debug ]]; then
         git checkout -b $branch
     fi
 
-    if [[ $pr_exists_and_open -eq 0 || $FORCE ]]; then
-        # Generate files in a temporary directory
-        # Use subshell to return to original directory when finished with scratchwork
-        create_scratch
-        (
-            cd $scratch
-            home=$OLDPWD
-            echo "Downloading latest release..."
-            gh release download --pattern 'Firebase.zip' --repo $firebase_repo
-            echo "Unzipping.."
-            unzip -q Firebase.zip
-            # Sometimes Firebase packages frameworks in a folder named for the version
-            if [ ! -d "Firebase" ]; then
-                # Get version number with _ instead of .
-                fixed_version=$(echo $latest | sed 's/\./_/g')
-
-                if [ -d "$fixed_version" ]; then
-                    cd $fixed_version
-                    # Find the first zip file in the current directory
-                    zip_file=$(ls -1 | grep .zip | head -1)
-                    echo "Unzipping $zip_file..."
-                    unzip -q $zip_file
-                    mv Firebase ../Firebase
-                    cd ..
-                else
-                    echo "Could not find Firebase folder."
-                    exit 1
-                fi
-            fi
-            cd Firebase
-            echo "Preparing xcframeworks for distribution..."
-            rename_frameworks "_"
-            zip_frameworks
-            echo "Creating distribution files..."
-            prepare_files_for_distribution "../$distribution"
-            echo "Creating source files..."
-            generate_sources "../$sources"
-            # Create test package using local binaries and make sure it builds
-            generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo $distribution
-            (cd ..; swift build) # TODO: create tests and replace this line with `(cd ..; swift test)`
-            # Create release package using remote binaries and make sure the Package.swift file is parseable
-            generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo ''
-        )
-
-        echo "Moving files to repo..."; cd ..
-        # Remove any existing files
-        if [ -d $sources ]; then rm -rf "$sources"; fi
-        if [ -f $package ]; then rm -f "$package"; fi
-        # Move generated files into the repo directory
-        mv "$scratch/$sources" "$sources"
-        mv "$scratch/$package" "$package"
-    else
-        echo "Pull request $branch already exists and is open."
+    if [[ $has_pending_draft -eq 1 && $pr_exists_and_open -eq 1 && ! $skip_release ]]; then
+        echo "PR is open and draft release $latest_draft is pending."
+        approve_and_merge_pr $branch
+        release_release $latest
+        echo "Done."
+        exit 0
+    elif [[ $has_pending_draft -eq 1 && $pr_exists_and_open -eq 0 && ! $skip_release ]]; then
+        echo "PR is closed and draft release $latest_draft is pending."
+        echo "Releasing..."
+        release_release $latest
+        echo "Done."
+        exit 0
     fi
+
+    # Generate files in a temporary directory
+    # Use subshell to return to original directory when finished with scratchwork
+    create_scratch
+    (
+        cd $scratch
+        home=$OLDPWD
+        echo "Downloading latest release..."
+        gh release download --pattern 'Firebase.zip' --repo $firebase_repo
+        echo "Unzipping.."
+        unzip -q Firebase.zip
+        # Sometimes Firebase packages frameworks in a folder named for the version
+        if [ ! -d "Firebase" ]; then
+            # Get version number with _ instead of .
+            fixed_version=$(echo $latest | sed 's/\./_/g')
+
+            if [ -d "$fixed_version" ]; then
+                cd $fixed_version
+                # Find the first zip file in the current directory
+                zip_file=$(ls -1 | grep .zip | head -1)
+                echo "Unzipping $zip_file..."
+                unzip -q $zip_file
+                mv Firebase ../Firebase
+                cd ..
+            else
+                echo "Could not find Firebase folder."
+                exit 1
+            fi
+        fi
+        cd Firebase
+        echo "Preparing xcframeworks for distribution..."
+        rename_frameworks "_"
+        zip_frameworks
+        echo "Creating distribution files..."
+        prepare_files_for_distribution "../$distribution"
+        echo "Creating source files..."
+        generate_sources "../$sources"
+        # Create test package using local binaries and make sure it builds
+        generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo $distribution
+        (cd ..; swift build) # TODO: create tests and replace this line with `(cd ..; swift test)`
+        # Create release package using remote binaries and make sure the Package.swift file is parseable
+        generate_swift_package "../$package" "$home/package_template.swift" "../$distribution" $xcframeworks_repo ''
+    )
+
+    echo "Moving files to repo..."; cd ..
+    # Remove any existing files
+    if [ -d $sources ]; then rm -rf "$sources"; fi
+    if [ -f $package ]; then rm -f "$package"; fi
+    # Move generated files into the repo directory
+    mv "$scratch/$sources" "$sources"
+    mv "$scratch/$package" "$package"
 
     # Skips deploy
     if [[ $skip_release ]]; then echo "Done."; exit 0; fi
