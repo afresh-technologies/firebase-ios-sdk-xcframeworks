@@ -50,7 +50,7 @@ jobs:
           # Get the latest workflow run ID for the branch
           run_id=$(gh run list --branch $branch_name --workflow "Build Release" --limit 1 --json databaseId | jq -r '.[0].databaseId')
       
-          if [ -z "$run_id" ]; then
+          if [ "$run_id" = "null" ]; then
             echo "No build workflow run found for branch $branch_name"
           else
             echo "Found build workflow run ID: $run_id"
