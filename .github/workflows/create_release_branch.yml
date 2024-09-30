@@ -42,3 +42,4 @@ jobs:
           git push origin $BRANCH
         env:
           BRANCH: release/${{ steps.latest_firebase_release.outputs.latest_firebase_release }}
+          GITHUB_TOKEN: ${{ secrets.AFRESHY_PAT }}
