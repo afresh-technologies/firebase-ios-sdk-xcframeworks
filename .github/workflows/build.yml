@@ -2,13 +2,12 @@ name: Build Release
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'releases/**'
+  create:
 
 jobs:
   build:
     runs-on: macos-latest
+    if: ${{ (github.event.ref_type == 'branch') && startsWith(github.ref, 'refs/heads/release/') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
