@@ -258,6 +258,8 @@ set -o pipefail
 # Release versions
 latest=$VERSION
 
+distribution="build"
+
 # Generate files in a temporary directory
 # Use subshell to return to original directory when finished with scratchwork
 create_scratch
