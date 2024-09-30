@@ -258,7 +258,9 @@ set -o pipefail
 # Release versions
 latest=$VERSION
 
-distribution="build"
+distribution="dist"
+sources="Sources"
+package="Package.swift"
 
 # Generate files in a temporary directory
 # Use subshell to return to original directory when finished with scratchwork
