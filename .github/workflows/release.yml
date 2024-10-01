@@ -61,7 +61,7 @@ jobs:
 
             echo "Creating a release for version $version"
 
-            release_notes=$(gh release view $VERSION --repo $FIREBASE_REPO --json body | jq -r '.body')
+            release_notes=$(gh release view $VERSION --repo $FIREBASE_REPO --json body | jq '.body')
         
             # Create a new release
             gh release create $version ./artifacts/* \
