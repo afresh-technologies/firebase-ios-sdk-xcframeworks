@@ -24,9 +24,9 @@ jobs:
           version=$(gh release view --repo $REPO --json tagName --jq '.tagName')
 
           if [ -z "$VERSION_OVERRIDE" ]; then
-            echo "::set-output name=version::${VERSION_OVERRIDE}"
-          else
             echo "::set-output name=version::${version}"
+          else
+            echo "::set-output name=version::${VERSION_OVERRIDE}"
           fi
         env:
           REPO: firebase/firebase-ios-sdk

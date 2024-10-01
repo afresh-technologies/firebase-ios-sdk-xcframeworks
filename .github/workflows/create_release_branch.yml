@@ -32,9 +32,9 @@ jobs:
           latest_firebase_release=$(gh release view --repo $REPO --json tagName --jq '.tagName')
 
           if [ -z "$VERSION_OVERRIDE" ]; then
-            echo "::set-output name=latest_firebase_release::${VERSION_OVERRIDE}"
-          else
             echo "::set-output name=latest_firebase_release::${latest_firebase_release}"
+          else
+            echo "::set-output name=latest_firebase_release::${VERSION_OVERRIDE}"
           fi
         env:
           REPO: firebase/firebase-ios-sdk
