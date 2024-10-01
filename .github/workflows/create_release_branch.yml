@@ -2,6 +2,11 @@ name: Create Release Branch
 
 on:
   workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Version override'
+        required: false
+        type: string
   schedule:
     # Every day at 05:00 EST (10:00 UTC)
     - cron: '0 10 * * *'
@@ -25,10 +30,16 @@ jobs:
         id: latest_firebase_release
         run: |
           latest_firebase_release=$(gh release view --repo $REPO --json tagName --jq '.tagName')
-          echo "::set-output name=latest_firebase_release::${latest_firebase_release}"
+
+          if [ -z "$VERSION_OVERRIDE" ]; then
+            echo "::set-output name=latest_firebase_release::${VERSION_OVERRIDE}"
+          else
+            echo "::set-output name=latest_firebase_release::${latest_firebase_release}"
+          fi
         env:
           REPO: firebase/firebase-ios-sdk
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
 
       - name: Check if branch exists
         id: check_branch

@@ -49,12 +49,19 @@ jobs:
           echo "Getting build workflow run for branch: $branch_name"
           
           # Get the latest workflow run ID for the branch
-          run_id=$(gh run list --branch $branch_name --workflow "Build Release" --limit 1 --json databaseId | jq -r '.[0].databaseId')
+          run_id=$(gh run list --branch $branch_name --workflow "Build Release" --status success --limit 1 --json databaseId | jq -r '.[0].databaseId')
       
           if [ "$run_id" = "null" ]; then
             echo "No build workflow run found for branch $branch_name"
           else
             echo "Found build workflow run ID: $run_id"
+
+            artifact_count=$(gh api repos/${{ github.repository }}/actions/runs/$run_id/artifacts | jq -r '.total_count')
+
+            if [ "$artifact_count" -eq 0 ]; then
+              echo "No artifacts found for workflow run $run_id"
+              exit 0
+            fi
 
             # Download all artifacts from the workflow run
             gh run download $run_id --repo ${{ github.repository }} --dir ./artifacts/
