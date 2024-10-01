@@ -2,6 +2,11 @@ name: Release Version
 
 on:
   workflow_dispatch:
+    inputs:
+      version_override:
+        description: 'Version override'
+        required: false
+        type: string
   push:
     branches:
       - 'main'
@@ -17,10 +22,16 @@ jobs:
         id: latest_firebase_release
         run: |
           version=$(gh release view --repo $REPO --json tagName --jq '.tagName')
-          echo "::set-output name=version::${version}"
+
+          if [ -z "$VERSION_OVERRIDE" ]; then
+            echo "::set-output name=version::${VERSION_OVERRIDE}"
+          else
+            echo "::set-output name=version::${version}"
+          fi
         env:
           REPO: firebase/firebase-ios-sdk
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
 
       - name: Check if branch exists
         id: check_branch
