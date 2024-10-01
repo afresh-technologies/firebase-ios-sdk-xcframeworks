@@ -39,6 +39,7 @@ playground.xcworkspace
 
 # ignore distribution files
 dist/
+artifacts/
 
 # ignore swift package manager files
 .swiftpm/
