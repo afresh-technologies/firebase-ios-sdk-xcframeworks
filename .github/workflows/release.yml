@@ -22,7 +22,21 @@ jobs:
           REPO: firebase/firebase-ios-sdk
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if branch exists
+        id: check_branch
+        run: |
+          git fetch origin
+
+          if git ls-remote --heads origin "$BRANCH" | grep -q "$BRANCH"; then
+            echo "::set-output name=exists::true"
+          else
+            echo "::set-output name=exists::false"
+          fi
+        env:
+          BRANCH: release/${{ steps.latest_firebase_release.outputs.version }}    
+
       - name: Check if release exists
+        if: steps.check_branch.outputs.exists == 'true'
         id: check_release
         run: |
           echo "Checking if release $version exists..."
@@ -41,7 +55,7 @@ jobs:
         
 
       - name: Create release
-        if: steps.check_release.outputs.exists == 'false'
+        if: ${{ (steps.check_release.outputs.exists == 'false') && (steps.check_branch.outputs.exists == 'true') }}
         run: |
           branch_name=release/$VERSION
           workflow_name="Build Release"
