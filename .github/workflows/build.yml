@@ -88,4 +88,4 @@ jobs:
         run: |
           gh pr merge --squash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.AFRESHY_PAT }}
