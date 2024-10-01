@@ -311,6 +311,7 @@ if [ -f $package ]; then rm -f "$package"; fi
 # Move generated files into the repo directory
 mv "$scratch/$sources" "$sources"
 mv "$scratch/$package" "$package"
-mv "$scratch/$distribution" ../artifacts
+mkdir artifacts
+mv -v $scratch/$distribution/*.xcframework.zip artifacts/
 
 echo "Done."
