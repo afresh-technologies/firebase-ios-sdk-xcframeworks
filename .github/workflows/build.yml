@@ -3,6 +3,9 @@ name: Build Release
 on:
   workflow_dispatch:
   create:
+  push:
+    branches:
+      - 'release/*'
 
 jobs:
   build:
@@ -36,7 +39,7 @@ jobs:
           echo "Getting release notes for $REPO version $VERSION"
 
           # Get release notes
-          release_notes=$(gh release view $VERSION --repo $REPO --json body | jq -r '.body')
+          release_notes=$(gh release view $VERSION --repo $REPO --json body | jq '.body')
           echo "::set-output name=release_notes::${release_notes}"
           
           echo "Downloading artifact from $REPO version $VERSION"
@@ -80,3 +83,9 @@ jobs:
           gh pr review --approve
         env:
           GITHUB_TOKEN: ${{ secrets.AFRESHY_PAT }}
+
+      - name: Merge pull request
+        run: |
+          gh pr merge --squash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
