@@ -96,7 +96,7 @@ jobs:
             gh release view $VERSION --repo $FIREBASE_REPO --json body | jq -r '.body' >> release_notes.txt
         
             # Create a new release
-            gh release create $VERSION ./artifacts/* \
+            gh release create $VERSION ./artifacts/Firebase/* \
               --title "$VERSION" \
               --notes-file release_notes.txt
           fi
